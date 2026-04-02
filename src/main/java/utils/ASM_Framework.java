@@ -34,7 +34,7 @@ import java.time.Duration;
  * driver.closeAllTabs();
  * }</pre>
  *
- * @author ASM
+ * @author ASMahrous
  * @version 1.0
  */
 public class ASM_Framework {
