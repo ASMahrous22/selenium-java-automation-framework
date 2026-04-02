@@ -1,13 +1,16 @@
 package utils;
 
 import org.openqa.selenium.By;
+import org.openqa.selenium.NoSuchElementException;
 import org.openqa.selenium.WebDriver;
 import org.openqa.selenium.WebElement;
 import org.openqa.selenium.chrome.ChromeDriver;
 import org.openqa.selenium.edge.EdgeDriver;
 import org.openqa.selenium.firefox.FirefoxDriver;
+import org.openqa.selenium.interactions.Actions;
 import org.openqa.selenium.safari.SafariDriver;
 import org.openqa.selenium.support.ui.ExpectedConditions;
+import org.openqa.selenium.support.ui.FluentWait;
 import org.openqa.selenium.support.ui.Select;
 import org.openqa.selenium.support.ui.WebDriverWait;
 
@@ -202,7 +205,7 @@ public class ASM_Framework {
     // ========================
 
     /**
-     * Finds and returns a WebElement using the specified locator strategy.
+     * Converts a locator strategy string and value into a Selenium {@link By} object.
      *
      * <p>Supported locator types (case-insensitive):
      * <ul>
@@ -216,38 +219,77 @@ public class ASM_Framework {
      *
      * @param by      the locator strategy (e.g., "id", "xpath")
      * @param locator the locator value (e.g., "loginBtn", "//button[@type='submit']")
-     * @return the found WebElement
+     * @return the corresponding {@link By} object
      * @throws IllegalArgumentException if the locator type is not recognized
      */
-    public WebElement findElement(String by, String locator)
+    public By getBy(String by, String locator)
     {
         switch (by.toLowerCase())
         {
             case "id":
-                return browser.findElement(By.id(locator));
+                return By.id(locator);
 
             case "name":
-                return browser.findElement(By.name(locator));
+                return By.name(locator);
 
             case "class name":
             case "class":
-                return browser.findElement(By.className(locator));
+                return By.className(locator);
 
             case "xpath":
-                return browser.findElement(By.xpath(locator));
+                return By.xpath(locator);
 
             case "css selector":
             case "css":
-                return browser.findElement(By.cssSelector(locator));
+                return By.cssSelector(locator);
 
             default:
                 throw new IllegalArgumentException("Invalid locator type: " + by);
         }
     }
 
+    /**
+     * Finds and returns a WebElement using the specified locator strategy.
+     *
+     * <p>Delegates to {@link #getBy(String, String)} to resolve the locator,
+     * then finds the element in the current page DOM.</p>
+     *
+     * <p>Supported locator types (case-insensitive):
+     * <ul>
+     *   <li>{@code "id"}</li>
+     *   <li>{@code "name"}</li>
+     *   <li>{@code "class"} or {@code "class name"}</li>
+     *   <li>{@code "xpath"}</li>
+     *   <li>{@code "css"} or {@code "css selector"}</li>
+     * </ul>
+     * </p>
+     *
+     * @param by      the locator strategy (e.g., "name", "id", "xpath", "css")
+     * @param locator the locator value (e.g., "loginBtn", "//button[@type='submit']")
+     * @return the found WebElement
+     * @throws IllegalArgumentException if the locator type is not recognized
+     */
+    public WebElement findElement(String by, String locator)
+    {
+        return browser.findElement(getBy(by, locator));
+    }
+
     // ========================
     // Element Interaction
     // ========================
+
+    /**
+     * Finds the element by locator, clears it, then types the given text.
+     *
+     * @param locator the By locator of the target input element
+     * @param text    the text to type
+     */
+    public void writeInElement(By locator, String text)
+    {
+        WebElement element = waitForElementToBeVisible(locator);
+        element.clear();
+        element.sendKeys(text);
+    }
 
     /**
      * Clears any existing text in the element, then types the given text.
@@ -263,6 +305,16 @@ public class ASM_Framework {
     }
 
     /**
+     * Finds the element by locator and clears its text content.
+     *
+     * @param locator the By locator of the target input element
+     */
+    public void clearElementText(By locator)
+    {
+        waitForElementToBeVisible(locator).clear();
+    }
+
+    /**
      * Clears all text content from the given input element.
      *
      * @param elementLocator the target input WebElement
@@ -271,6 +323,17 @@ public class ASM_Framework {
     {
         validateElementIsFound(elementLocator);
         elementLocator.clear();
+    }
+
+    /**
+     * Finds the element by locator and returns its visible text.
+     *
+     * @param locator the By locator of the target element
+     * @return the element's visible text
+     */
+    public String getElementText(By locator)
+    {
+        return waitForElementToBeVisible(locator).getText();
     }
 
     /**
@@ -296,6 +359,155 @@ public class ASM_Framework {
     {
         validateElementIsFound(elementLocator);
         waitForElementToBeClickable(elementLocator).click();
+    }
+
+    /**
+     * Waits for the element to be clickable, then clicks it.
+     *
+     * @param locator the By locator of the element to click
+     */
+    public void clickElement(By locator)
+    {
+        waitForElementToBeClickable(locator).click();
+    }
+
+    /**
+     * Performs a double click on the specified element.
+     *
+     * @param locator the By locator of the element to double-click
+     */
+    public void doubleClick(By locator)
+    {
+        WebElement element = waitForElementToBeClickable(locator);
+        new Actions(browser)
+                .doubleClick(element)
+                .perform();
+    }
+
+    /**
+     * Performs a double click on the specified element.
+     *
+     * @param elementLocator the WebElement to double-click
+     */
+    public void doubleClick(WebElement elementLocator)
+    {
+        validateElementIsFound(elementLocator);
+        new Actions(browser)
+                .doubleClick(elementLocator)
+                .perform();
+    }
+
+    /**
+     * Performs a right-click (context click) on the specified element.
+     *
+     * @param locator the By locator of the element to right-click
+     */
+    public void rightClick(By locator)
+    {
+        WebElement element = waitForElementToBeVisible(locator);
+        new Actions(browser)
+                .contextClick(element)
+                .perform();
+    }
+
+    /**
+     * Drags an element from source and drops it onto the target element.
+     *
+     * @param sourceLocator the By locator of the element to drag
+     * @param targetLocator the By locator of the drop target
+     */
+    public void dragAndDrop(By sourceLocator, By targetLocator)
+    {
+        WebElement source = waitForElementToBeVisible(sourceLocator);
+        WebElement target = waitForElementToBeVisible(targetLocator);
+        new Actions(browser)
+                .dragAndDrop(source, target)
+                .perform();
+    }
+
+    /**
+     * Scrolls the viewport to bring the specified element into view.
+     *
+     * @param locator the By locator of the element to scroll to
+     */
+    public void scrollToElement(By locator)
+    {
+        WebElement element = waitForElementToBeVisible(locator);
+        new Actions(browser)
+                .scrollToElement(element)
+                .perform();
+    }
+
+    /**
+     * Hovers the mouse over the specified element (mouse-over / tooltip trigger).
+     *
+     * @param locator the By locator of the element to hover over
+     */
+    public void hoverOverElement(By locator)
+    {
+        WebElement element = waitForElementToBeVisible(locator);
+        new Actions(browser)
+                .moveToElement(element)
+                .perform();
+    }
+
+    /**
+     * Hovers the mouse over the specified element (mouse-over / tooltip trigger).
+     *
+     * @param elementLocator the WebElement to hover over
+     */
+    public void hoverOverElement(WebElement elementLocator)
+    {
+        validateElementIsFound(elementLocator);
+        new Actions(browser)
+                .moveToElement(elementLocator)
+                .perform();
+    }
+
+    // =========================
+    // Checkbox & Radio Buttons
+    // =========================
+
+    /**
+     * Checks a checkbox if it is not already checked.
+     *
+     * @param locator the By locator of the checkbox element
+     */
+    public void checkCheckbox(By locator)
+    {
+        WebElement checkbox = waitForElementToBeClickable(locator);
+        if (!checkbox.isSelected())
+        {
+            checkbox.click();
+        }
+    }
+
+    /**
+     * Unchecks a checkbox if it is currently checked.
+     *
+     * @param locator the By locator of the checkbox element
+     */
+    public void uncheckCheckbox(By locator)
+    {
+        WebElement checkbox = waitForElementToBeClickable(locator);
+        if (checkbox.isSelected())
+        {
+            checkbox.click();
+        }
+    }
+
+    /**
+     * Selects a radio button if it is not already selected.
+     *
+     * @param locator the By locator of the radio button element
+     */
+    public void selectRadioButton(By locator)
+    {
+        WebElement radioButton = waitForElementToBeClickable(locator);
+        if (!radioButton.isSelected())
+        {
+            radioButton.click();
+        }
     }
 
     // ========================
@@ -352,6 +564,27 @@ public class ASM_Framework {
     }
 
     /**
+     * Finds the dropdown by locator, then selects an option using the specified strategy.
+     *
+     * <p>Supported selection strategies (case-insensitive):
+     * <ul>
+     *   <li>{@code "index"} — select by option index (0-based)</li>
+     *   <li>{@code "value"} — select by option {@code value} attribute</li>
+     *   <li>{@code "visible"} / {@code "visible text"} — select by exact visible text</li>
+     *   <li>{@code "contains"} / {@code "contains text"} — select by partial visible text</li>
+     * </ul>
+     * </p>
+     *
+     * @param locator     the By locator of the dropdown element
+     * @param selectBy    the selection strategy
+     * @param selectInput the value to select by (index, value string, or text)
+     */
+    public void selectFromDropDownMenu(By locator, String selectBy, String selectInput)
+    {
+        selectFromDropDownMenu(waitForElementToBeVisible(locator), selectBy, selectInput);
+    }
+
+    /**
      * Deselects an option from a multi-select HTML {@code <select>} dropdown.
      *
      * <p>Supported deselection strategies (case-insensitive):
@@ -403,6 +636,28 @@ public class ASM_Framework {
             default:
                 System.out.println("Invalid selection type: " + deselectBy);
         }
+    }
+
+    /**
+     * Finds the dropdown by locator, then deselects an option using the specified strategy.
+     *
+     * <p>Supported deselection strategies (case-insensitive):
+     * <ul>
+     *   <li>{@code "index"} — deselect by option index</li>
+     *   <li>{@code "value"} — deselect by option {@code value} attribute</li>
+     *   <li>{@code "visible"} / {@code "visible text"} — deselect by exact visible text</li>
+     *   <li>{@code "contains"} / {@code "contains text"} — deselect by partial visible text</li>
+     *   <li>{@code "all"} — deselect all selected options</li>
+     * </ul>
+     * </p>
+     *
+     * @param locator       the By locator of the dropdown element
+     * @param deselectBy    the deselection strategy
+     * @param deselectInput the value to deselect by (ignored when strategy is "all")
+     */
+    public void deselectFromDropDownMenu(By locator, String deselectBy, String deselectInput)
+    {
+        deselectFromDropDownMenu(waitForElementToBeVisible(locator), deselectBy, deselectInput);
     }
 
     // ========================
@@ -520,6 +775,37 @@ public class ASM_Framework {
             default:
                 throw new IllegalArgumentException("Invalid time unit: " + durationIn);
         }
+    }
+
+    /**
+     * Explicitly waits for the presence of an element in the DOM.
+     *
+     * @param locator        the By locator of the element
+     * @param timeoutSeconds how long to wait before throwing TimeoutException
+     */
+    public void setExplicitWait(By locator, long timeoutSeconds)
+    {
+        WebDriverWait wait = new WebDriverWait(browser, Duration.ofSeconds(timeoutSeconds));
+        wait.until(ExpectedConditions.presenceOfElementLocated(locator));
+    }
+
+    /**
+     * Waits for an element to be present using a Fluent Wait strategy.
+     * Polls repeatedly until the element appears or the timeout is reached.
+     *
+     * @param locator         the By locator of the element
+     * @param timeoutSeconds  maximum time to wait
+     * @param pollingMillis   how often to check (in milliseconds)
+     * @param timeoutMessage  custom message if timeout is reached
+     */
+    public void setFluentWait(By locator, long timeoutSeconds, long pollingMillis, String timeoutMessage)
+    {
+        new FluentWait<>(browser)
+                .withTimeout(Duration.ofSeconds(timeoutSeconds))
+                .pollingEvery(Duration.ofMillis(pollingMillis))
+                .ignoring(NoSuchElementException.class)
+                .withMessage(timeoutMessage)
+                .until(ExpectedConditions.presenceOfElementLocated(locator));
     }
 
     // ========================
