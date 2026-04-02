@@ -8,9 +8,12 @@ A lightweight Java wrapper around Selenium WebDriver that provides a clean, read
 
 - **Multi-browser support** — Chrome, Firefox, Edge, Safari
 - **Smart element finding** — supports ID, Name, Class, XPath, CSS Selector
-- **Built-in Explicit Waits** — clickable and visibility checks before interactions
+- **Dual input style** — every method accepts both `By` locator and `WebElement`
+- **Built-in Explicit & Fluent Waits** — clickable and visibility checks before every interaction
 - **Flexible Implicit Wait** — set wait duration using human-readable strings like `"seconds"` or `"ms"`
+- **Actions support** — right-click, double-click, hover, drag & drop, scroll
 - **Dropdown handling** — select/deselect by index, value, visible text, or partial text
+- **Checkbox & Radio support** — smart check/uncheck with state awareness
 - **Element state validation** — check if elements are visible, enabled, or selected
 - **Defensive null checks** — clear error messages when elements are missing
 
@@ -48,7 +51,7 @@ selenium_java_automation_framework/
 
 ### 1. Clone the repo
 ```bash
-git clone https://github.com/YOUR_USERNAME/selenium-java-automation-framework.git
+git clone https://github.com/ASMahrous22/selenium-java-automation-framework.git
 cd selenium-java-automation-framework
 ```
 
@@ -89,26 +92,57 @@ driver.closeAllTabs();
 | `closeCurrentTab()` | Close the active tab |
 | `closeAllTabs()` | Quit the browser session |
 
-### Element Interaction
+### Element Finding
 
 | Method | Description |
 |--------|-------------|
-| `findElement(by, locator)` | Find an element by strategy and value |
-| `clickElement(element)` | Wait until clickable, then click |
-| `writeInElement(element, text)` | Clear field and type text |
-| `clearElementText(element)` | Clear an input field |
-| `getElementText(element)` | Get visible text of an element |
+| `findElement(by, locator)` | Find element — returns `WebElement` |
+| `getBy(by, locator)` | Convert string strategy to `By` object |
+
+**Supported locator strategies:** `"id"`, `"name"`, `"class"`, `"xpath"`, `"css"`
+
+### Element Interaction
+
+All interaction methods accept both `By` and `WebElement`.
+
+| Method | Description |
+|--------|-------------|
+| `clickElement(By / WebElement)` | Wait until clickable, then click |
+| `doubleClick(By / WebElement)` | Double-click an element |
+| `writeInElement(By / WebElement, text)` | Clear field and type text |
+| `clearElementText(By / WebElement)` | Clear an input field |
+| `getElementText(By / WebElement)` | Get visible text of an element |
+
+### Actions
+
+| Method | Description |
+|--------|-------------|
+| `rightClick(By)` | Right-click (context menu) on an element |
+| `doubleClick(By / WebElement)` | Double-click an element |
+| `hoverOverElement(By / WebElement)` | Hover mouse over an element |
+| `dragAndDrop(By source, By target)` | Drag source and drop onto target |
+| `scrollToElement(By)` | Scroll element into viewport |
+
+### Checkbox & Radio
+
+| Method | Description |
+|--------|-------------|
+| `checkCheckbox(By)` | Check a checkbox if not already checked |
+| `uncheckCheckbox(By)` | Uncheck a checkbox if currently checked |
+| `selectRadioButton(By)` | Select a radio button if not already selected |
 
 ### Dropdown Handling
 
+All dropdown methods accept both `By` and `WebElement`.
+
 | Method | Description |
 |--------|-------------|
-| `selectFromDropDownMenu(element, by, value)` | Select a dropdown option |
-| `deselectFromDropDownMenu(element, by, value)` | Deselect a dropdown option |
+| `selectFromDropDownMenu(By / WebElement, by, value)` | Select a dropdown option |
+| `deselectFromDropDownMenu(By / WebElement, by, value)` | Deselect a dropdown option |
 
 **Selection strategies:** `"index"`, `"value"`, `"visible text"`, `"contains text"`
 
-### Element State
+### Element State Validation
 
 | Method | Returns | Description |
 |--------|---------|-------------|
@@ -120,10 +154,12 @@ driver.closeAllTabs();
 
 | Method | Description |
 |--------|-------------|
-| `setImplicitWait(Duration)` | Set implicit wait using Duration object |
+| `setImplicitWait(Duration)` | Set implicit wait using `Duration` object |
 | `setImplicitWait("seconds", 5)` | Set implicit wait using readable string |
+| `explicitWait(By, timeoutSeconds)` | Wait for element presence with custom timeout |
+| `fluentWait(By, timeout, pollingMs, message)` | Fluent wait with polling interval and custom message |
 
-**Supported time units:** `"seconds"`, `"minutes"`, `"hours"`, `"days"`, `"ms"`, `"ns"`
+**Supported time units for implicit wait:** `"seconds"`, `"minutes"`, `"hours"`, `"days"`, `"ms"`, `"ns"`
 
 ---
 
@@ -135,18 +171,23 @@ ASM_Framework driver = new ASM_Framework("chrome");
 driver.manageScreenSize("maximize");
 driver.goToURL("https://the-internet.herokuapp.com/login");
 
-// Login
-WebElement username = driver.findElement("id", "username");
-WebElement password = driver.findElement("id", "password");
-WebElement loginBtn = driver.findElement("xpath", "//button[@type='submit']");
-
-driver.writeInElement(username, "tomsmith");
-driver.writeInElement(password, "SuperSecretPassword!");
-driver.clickElement(loginBtn);
+// Login using By locator directly
+driver.writeInElement(By.id("username"), "tomsmith");
+driver.writeInElement(By.id("password"), "SuperSecretPassword!");
+driver.clickElement(By.xpath("//button[@type='submit']"));
 
 // Validate result
-WebElement message = driver.findElement("css", ".flash.success");
-System.out.println(driver.getElementText(message));
+System.out.println(driver.getElementText(By.cssSelector(".flash.success")));
+
+// Dropdown
+driver.selectFromDropDownMenu(By.id("dropdown"), "index", "1");
+
+// Checkbox
+driver.checkCheckbox(By.id("agreeTerms"));
+
+// Hover then click
+driver.hoverOverElement(By.id("menu"));
+driver.clickElement(By.id("menuItem"));
 
 driver.closeAllTabs();
 ```
@@ -154,6 +195,10 @@ driver.closeAllTabs();
 ---
 
 ## Author
+
+**ASMahrous** — Built as part of a Selenium automation learning journey.
+
+Feel free to fork, use, or contribute!
 
 **ASM** — Built as part of a Selenium automation learning journey.
 
