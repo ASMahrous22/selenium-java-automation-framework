@@ -1,9 +1,6 @@
 package utils;
 
-import org.openqa.selenium.By;
-import org.openqa.selenium.NoSuchElementException;
-import org.openqa.selenium.WebDriver;
-import org.openqa.selenium.WebElement;
+import org.openqa.selenium.*;
 import org.openqa.selenium.chrome.ChromeDriver;
 import org.openqa.selenium.edge.EdgeDriver;
 import org.openqa.selenium.firefox.FirefoxDriver;
@@ -14,7 +11,17 @@ import org.openqa.selenium.support.ui.FluentWait;
 import org.openqa.selenium.support.ui.Select;
 import org.openqa.selenium.support.ui.WebDriverWait;
 
+import java.io.File;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.time.Duration;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Set;
 
 /**
  * ASM_Framework — A Selenium WebDriver wrapper that simplifies browser automation.
@@ -873,5 +880,335 @@ public class ASM_Framework {
     {
         WebDriverWait wait = new WebDriverWait(browser, DEFAULT_TIMEOUT);
         return wait.until(ExpectedConditions.visibilityOf(elementLocator));
+    }
+
+    // ========================
+    // Window Handling
+    // ========================
+
+    /**
+     * Returns the handle (unique ID) of the currently focused browser window or tab.
+     *
+     * <p>Store this handle before opening new windows so you can switch back later:</p>
+     * <pre>{@code
+     * String mainWindow = driver.getCurrentWindowHandle();
+     * driver.clickElement(By.id("openPopup"));
+     * driver.switchToNewWindow(mainWindow);
+     * // ... interact with popup ...
+     * driver.switchToWindowByHandle(mainWindow);
+     * }</pre>
+     *
+     * @return the current window handle string
+     */
+    public String getCurrentWindowHandle()
+    {
+        return browser.getWindowHandle();
+    }
+
+    /**
+     * Returns all open window/tab handles as an ordered list.
+     *
+     * <p>Windows are returned in the order they were opened, making
+     * index-based switching predictable:</p>
+     * <pre>{@code
+     * driver.switchToWindowByIndex(1); // second tab
+     * }</pre>
+     *
+     * @return a {@link List} of all open window handle strings
+     */
+    public List<String> getAllWindowHandles()
+    {
+        return new ArrayList<>(browser.getWindowHandles());
+    }
+
+    /**
+     * Switches focus to a window or tab by its handle string.
+     *
+     * @param windowHandle the handle of the target window (from {@link #getCurrentWindowHandle()}
+     *                     or {@link #getAllWindowHandles()})
+     */
+    public void switchToWindowByHandle(String windowHandle)
+    {
+        browser.switchTo().window(windowHandle);
+    }
+
+    /**
+     * Switches focus to a window or tab by its position index (0-based).
+     *
+     * <p>Index {@code 0} is always the first opened window/tab.</p>
+     *
+     * @param index the 0-based index of the target window
+     * @throws IndexOutOfBoundsException if the index exceeds the number of open windows
+     */
+    public void switchToWindowByIndex(int index)
+    {
+        List<String> handles = getAllWindowHandles();
+        browser.switchTo().window(handles.get(index));
+    }
+
+    /**
+     * Switches focus to the newest window or tab that was opened after the given parent handle.
+     *
+     * <p>Typical pattern — click a link that opens a popup, then call this method:</p>
+     * <pre>{@code
+     * String parent = driver.getCurrentWindowHandle();
+     * driver.clickElement(By.linkText("Open in new tab"));
+     * driver.switchToNewWindow(parent);
+     * }</pre>
+     *
+     * @param parentHandle the handle of the originating window to exclude from the search
+     * @throws RuntimeException if no new window is found
+     */
+    public void switchToNewWindow(String parentHandle)
+    {
+        Set<String> allHandles = browser.getWindowHandles();
+        for (String handle : allHandles)
+        {
+            if (!handle.equals(parentHandle))
+            {
+                browser.switchTo().window(handle);
+                return;
+            }
+        }
+        throw new RuntimeException("No new window found after switching from handle: " + parentHandle);
+    }
+
+    /**
+     * Closes the currently focused window or tab, then switches focus back to the given handle.
+     *
+     * <p>Useful for closing a popup and returning to the main window:</p>
+     * <pre>{@code
+     * String mainWindow = driver.getCurrentWindowHandle();
+     * driver.switchToNewWindow(mainWindow);
+     * // ... interact with popup ...
+     * driver.closeCurrentWindowAndSwitchTo(mainWindow);
+     * }</pre>
+     *
+     * @param windowHandleToSwitchTo the handle to focus after closing the current window
+     */
+    public void closeCurrentWindowAndSwitchTo(String windowHandleToSwitchTo)
+    {
+        browser.close();
+        browser.switchTo().window(windowHandleToSwitchTo);
+    }
+
+    /**
+     * Returns the total number of currently open windows or tabs.
+     *
+     * @return the count of open window handles
+     */
+    public int getWindowCount()
+    {
+        return browser.getWindowHandles().size();
+    }
+
+    // ========================
+    // Alert Handling
+    // ========================
+
+    /**
+     * Waits for a JavaScript alert/confirm/prompt to appear, then returns it.
+     *
+     * <p>Internal helper used by all public alert methods.</p>
+     *
+     * @return the {@link Alert} object once it is present
+     */
+    private Alert waitForAlert()
+    {
+        WebDriverWait wait = new WebDriverWait(browser, DEFAULT_TIMEOUT);
+        return wait.until(ExpectedConditions.alertIsPresent());
+    }
+
+    /**
+     * Accepts (clicks OK on) the currently open JavaScript alert, confirm, or prompt dialog.
+     *
+     * <p>Use this for:
+     * <ul>
+     *   <li>Alert — dismisses the dialog</li>
+     *   <li>Confirm — clicks OK (returns {@code true} to the page)</li>
+     *   <li>Prompt — submits whatever text was typed (or empty string)</li>
+     * </ul>
+     * </p>
+     */
+    public void acceptAlert()
+    {
+        waitForAlert().accept();
+    }
+
+    /**
+     * Dismisses (clicks Cancel on) the currently open JavaScript confirm or prompt dialog.
+     *
+     * <p>Note: calling dismiss on a plain alert has the same effect as accepting it.</p>
+     */
+    public void dismissAlert()
+    {
+        waitForAlert().dismiss();
+    }
+
+    /**
+     * Returns the message text displayed inside the current JavaScript alert dialog.
+     *
+     * @return the alert message string
+     */
+    public String getAlertText()
+    {
+        return waitForAlert().getText();
+    }
+
+    /**
+     * Types text into a JavaScript prompt dialog, then accepts it.
+     *
+     * <p>Example:</p>
+     * <pre>{@code
+     * driver.typeInAlert("John Doe"); // enters name and clicks OK
+     * }</pre>
+     *
+     * @param text the text to enter into the prompt input field
+     */
+    public void typeInAlert(String text)
+    {
+        Alert alert = waitForAlert();
+        alert.sendKeys(text);
+        alert.accept();
+    }
+
+    // ========================
+// IFrame Handling
+// ========================
+
+    /**
+     * Switches the WebDriver context into an iframe located by a {@link By} locator.
+     *
+     * <p>After calling this, all subsequent {@code findElement} calls will search
+     * inside the iframe. Remember to call {@link #switchToDefaultContent()} when done.</p>
+     *
+     * @param locator the By locator of the {@code <iframe>} element
+     */
+    public void switchToIFrame(By locator)
+    {
+        WebElement iFrame = waitForElementToBeVisible(locator);
+        browser.switchTo().frame(iFrame);
+    }
+
+    /**
+     * Switches the WebDriver context into an iframe using a {@link WebElement} reference.
+     *
+     * @param iFrameElement the WebElement representing the {@code <iframe>}
+     */
+    public void switchToIFrame(WebElement iFrameElement)
+    {
+        validateElementIsFound(iFrameElement);
+        browser.switchTo().frame(iFrameElement);
+    }
+
+    /**
+     * Switches the WebDriver context into an iframe by its 0-based index on the page.
+     *
+     * <p>Use when multiple iframes exist and you want to target one by position.</p>
+     *
+     * @param index the 0-based index of the iframe on the page
+     */
+    public void switchToIFrameByIndex(int index)
+    {
+        browser.switchTo().frame(index);
+    }
+
+    /**
+     * Switches the WebDriver context into an iframe by its {@code name} or {@code id} attribute.
+     *
+     * @param nameOrId the value of the iframe's {@code name} or {@code id} attribute
+     */
+    public void switchToIFrameByNameOrId(String nameOrId)
+    {
+        browser.switchTo().frame(nameOrId);
+    }
+
+    /**
+     * Switches the WebDriver context out of the current iframe and back to the
+     * top-level page (default content).
+     *
+     * <p>Always call this after finishing interactions inside an iframe.</p>
+     */
+    public void switchToDefaultContent()
+    {
+        browser.switchTo().defaultContent();
+    }
+
+    /**
+     * Switches the WebDriver context one level up — from a nested iframe to
+     * its immediate parent frame (or the main page if not nested).
+     */
+    public void switchToParentFrame()
+    {
+        browser.switchTo().parentFrame();
+    }
+
+
+    // ========================
+    // Screenshots
+    // ========================
+
+    /**
+     * Captures a screenshot of the current browser state and saves it to the
+     * {@code Screenshots/} folder at the project root.
+     *
+     * <p>The file is named using the provided label and a timestamp so each
+     * screenshot is uniquely identifiable and never overwrites another:</p>
+     * <pre>
+     * Screenshots/
+     * └── LoginPage_2025-07-21_14-35-22-123.png
+     * </pre>
+     *
+     * <p>The {@code Screenshots/} directory is created automatically if it does
+     * not already exist.</p>
+     *
+     * <p>Example:</p>
+     * <pre>{@code
+     * driver.takeScreenshot("LoginPage");
+     * driver.takeScreenshot("AfterSubmit");
+     * }</pre>
+     *
+     * @param screenshotLabel a short descriptive label used as the filename prefix
+     *                        (e.g., "LoginPage", "ErrorState"). Spaces are replaced
+     *                        with underscores automatically.
+     * @throws RuntimeException if the screenshot cannot be saved due to an I/O error
+     */
+    public void takeScreenshot(String screenshotLabel)
+    {
+        // Build the Screenshots folder path relative to the project root
+        Path screenshotsDir = Paths.get(System.getProperty("user.dir"), "Screenshots");
+
+        // Create the directory if it does not exist yet
+        try
+        {
+            Files.createDirectories(screenshotsDir);
+        }
+        catch (IOException e)
+        {
+            throw new RuntimeException("Failed to create Screenshots directory: " + screenshotsDir, e);
+        }
+
+        // Build a timestamp string: yyyy-MM-dd_HH-mm-ss-SSS
+        String timestamp = LocalDateTime.now()
+                .format(DateTimeFormatter.ofPattern("yyyy-MM-dd_HH-mm-ss-SSS"));
+
+        // Sanitize the label — replace spaces with underscores
+        String sanitizedLabel = screenshotLabel.trim().replace(" ", "_");
+
+        // Assemble the full file path
+        String fileName = sanitizedLabel + "_" + timestamp + ".png";
+        Path destination = screenshotsDir.resolve(fileName);
+
+        // Capture and save the screenshot
+        File sourceFile = ((TakesScreenshot) browser).getScreenshotAs(OutputType.FILE);
+        try
+        {
+            Files.copy(sourceFile.toPath(), destination);
+            System.out.println("Screenshot saved: " + destination);
+        }
+        catch (IOException e)
+        {
+            throw new RuntimeException("Failed to save screenshot to: " + destination, e);
+        }
     }
 }
