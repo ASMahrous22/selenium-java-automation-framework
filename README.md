@@ -15,6 +15,10 @@ A lightweight Java wrapper around Selenium WebDriver that provides a clean, read
 - **Dropdown handling** — select/deselect by index, value, visible text, or partial text
 - **Checkbox & Radio support** — smart check/uncheck with state awareness
 - **Element state validation** — check if elements are visible, enabled, or selected
+- **Multiple window handling** — switch between tabs/windows by handle, index, or auto-detect new
+- **Alert handling** — accept, dismiss, read, and type into JavaScript dialogs
+- **IFrame handling** — switch into/out of frames by locator, element, index, or name/id
+- **Timestamped screenshots** — capture and auto-save PNGs to a `Screenshots/` folder
 - **Defensive null checks** — clear error messages when elements are missing
 
 ---
@@ -41,6 +45,7 @@ selenium_java_automation_framework/
 ├── src/
 │   └── test/
 │       └── java/                        ← Your test classes go here
+├── Screenshots/                         ← Auto-created; stores captured screenshots
 ├── pom.xml
 └── README.md
 ```
@@ -92,6 +97,8 @@ driver.closeAllTabs();
 | `closeCurrentTab()` | Close the active tab |
 | `closeAllTabs()` | Quit the browser session |
 
+---
+
 ### Element Finding
 
 | Method | Description |
@@ -100,6 +107,8 @@ driver.closeAllTabs();
 | `getBy(by, locator)` | Convert string strategy to `By` object |
 
 **Supported locator strategies:** `"id"`, `"name"`, `"class"`, `"xpath"`, `"css"`
+
+---
 
 ### Element Interaction
 
@@ -113,6 +122,8 @@ All interaction methods accept both `By` and `WebElement`.
 | `clearElementText(By / WebElement)` | Clear an input field |
 | `getElementText(By / WebElement)` | Get visible text of an element |
 
+---
+
 ### Actions
 
 | Method | Description |
@@ -123,6 +134,8 @@ All interaction methods accept both `By` and `WebElement`.
 | `dragAndDrop(By source, By target)` | Drag source and drop onto target |
 | `scrollToElement(By)` | Scroll element into viewport |
 
+---
+
 ### Checkbox & Radio
 
 | Method | Description |
@@ -130,6 +143,8 @@ All interaction methods accept both `By` and `WebElement`.
 | `checkCheckbox(By)` | Check a checkbox if not already checked |
 | `uncheckCheckbox(By)` | Uncheck a checkbox if currently checked |
 | `selectRadioButton(By)` | Select a radio button if not already selected |
+
+---
 
 ### Dropdown Handling
 
@@ -142,6 +157,8 @@ All dropdown methods accept both `By` and `WebElement`.
 
 **Selection strategies:** `"index"`, `"value"`, `"visible text"`, `"contains text"`
 
+---
+
 ### Element State Validation
 
 | Method | Returns | Description |
@@ -150,31 +167,130 @@ All dropdown methods accept both `By` and `WebElement`.
 | `validateElementIsEnabled(element)` | `boolean` | Is the element interactable? |
 | `validateElementIsSelected(element)` | `boolean` | Is the element selected? |
 
+---
+
 ### Wait Management
 
 | Method | Description |
 |--------|-------------|
 | `setImplicitWait(Duration)` | Set implicit wait using `Duration` object |
 | `setImplicitWait("seconds", 5)` | Set implicit wait using readable string |
-| `explicitWait(By, timeoutSeconds)` | Wait for element presence with custom timeout |
-| `fluentWait(By, timeout, pollingMs, message)` | Fluent wait with polling interval and custom message |
+| `setExplicitWait(By, timeoutSeconds)` | Wait for element presence with custom timeout |
+| `setFluentWait(By, timeout, pollingMs, message)` | Fluent wait with polling interval and custom message |
 
 **Supported time units for implicit wait:** `"seconds"`, `"minutes"`, `"hours"`, `"days"`, `"ms"`, `"ns"`
 
 ---
 
-## Usage Example
+### Window Handling
+
+| Method | Description |
+|--------|-------------|
+| `getCurrentWindowHandle()` | Returns the handle of the currently focused window/tab |
+| `getAllWindowHandles()` | Returns all open window handles as an ordered `List` |
+| `switchToWindowByHandle(handle)` | Switch focus to a window by its handle string |
+| `switchToWindowByIndex(index)` | Switch focus to a window by its 0-based index |
+| `switchToNewWindow(parentHandle)` | Auto-detect and switch to the newest window/tab |
+| `closeCurrentWindowAndSwitchTo(handle)` | Close current window and return focus to a given handle |
+| `getWindowCount()` | Returns the total number of open windows/tabs |
+
+**Usage example:**
+```java
+String mainWindow = driver.getCurrentWindowHandle();
+driver.clickElement(By.linkText("Open in new tab"));
+driver.switchToNewWindow(mainWindow);
+// ... interact with the new tab ...
+driver.closeCurrentWindowAndSwitchTo(mainWindow);
+```
+
+---
+
+### Alert Handling
+
+| Method | Description |
+|--------|-------------|
+| `acceptAlert()` | Click OK on an alert, confirm, or prompt |
+| `dismissAlert()` | Click Cancel on a confirm or prompt |
+| `getAlertText()` | Read the message text of the current alert |
+| `typeInAlert(text)` | Type into a prompt dialog then accept it |
+
+All alert methods automatically wait up to `DEFAULT_TIMEOUT` for the dialog to appear.
+
+**Usage example:**
+```java
+driver.clickElement(By.id("deleteBtn"));
+System.out.println(driver.getAlertText()); // "Are you sure?"
+driver.acceptAlert();
+```
 
 ```java
-// Initialize with Chrome
+driver.clickElement(By.id("promptBtn"));
+driver.typeInAlert("John Doe"); // types and clicks OK
+```
+
+---
+
+### IFrame Handling
+
+| Method | Description |
+|--------|-------------|
+| `switchToIFrame(By)` | Switch into an iframe using a `By` locator |
+| `switchToIFrame(WebElement)` | Switch into an iframe using a `WebElement` reference |
+| `switchToIFrameByIndex(index)` | Switch into an iframe by its 0-based position on the page |
+| `switchToIFrameByNameOrId(nameOrId)` | Switch into an iframe by its `name` or `id` attribute |
+| `switchToDefaultContent()` | Return to the top-level page content |
+| `switchToParentFrame()` | Step one level up from a nested iframe |
+
+**Usage example:**
+```java
+driver.switchToIFrame(By.id("paymentFrame"));
+driver.writeInElement(By.id("cardNumber"), "4111111111111111");
+driver.switchToDefaultContent(); // back to the main page
+```
+
+---
+
+### Screenshots
+
+| Method | Description |
+|--------|-------------|
+| `takeScreenshot(label)` | Capture the current page as a PNG and save it to `Screenshots/` |
+
+Screenshots are saved to a `Screenshots/` folder at the project root. The folder is created automatically if it does not exist. Each file is named using your label and a full timestamp to prevent overwrites:
+
+```
+Screenshots/
+├── LoginPage_2025-07-21_14-35-22-123.png
+├── AfterSubmit_2025-07-21_14-35-45-456.png
+└── ErrorState_2025-07-21_14-36-01-789.png
+```
+
+**Usage example:**
+```java
+driver.goToURL("https://example.com/login");
+driver.takeScreenshot("LoginPage");
+
+driver.writeInElement(By.id("username"), "admin");
+driver.clickElement(By.id("submit"));
+driver.takeScreenshot("AfterSubmit");
+```
+
+---
+
+## Full Usage Example
+
+```java
+// Initialize
 ASM_Framework driver = new ASM_Framework("chrome");
 driver.manageScreenSize("maximize");
 driver.goToURL("https://the-internet.herokuapp.com/login");
+driver.takeScreenshot("LoginPage");
 
-// Login using By locator directly
+// Login
 driver.writeInElement(By.id("username"), "tomsmith");
 driver.writeInElement(By.id("password"), "SuperSecretPassword!");
 driver.clickElement(By.xpath("//button[@type='submit']"));
+driver.takeScreenshot("AfterLogin");
 
 // Validate result
 System.out.println(driver.getElementText(By.cssSelector(".flash.success")));
@@ -189,6 +305,23 @@ driver.checkCheckbox(By.id("agreeTerms"));
 driver.hoverOverElement(By.id("menu"));
 driver.clickElement(By.id("menuItem"));
 
+// Handle a new tab
+String mainWindow = driver.getCurrentWindowHandle();
+driver.clickElement(By.linkText("Open new tab"));
+driver.switchToNewWindow(mainWindow);
+driver.takeScreenshot("NewTab");
+driver.closeCurrentWindowAndSwitchTo(mainWindow);
+
+// Handle an alert
+driver.clickElement(By.id("triggerAlert"));
+System.out.println(driver.getAlertText());
+driver.acceptAlert();
+
+// Work inside an iframe
+driver.switchToIFrame(By.id("contentFrame"));
+driver.writeInElement(By.id("innerInput"), "Hello from iframe");
+driver.switchToDefaultContent();
+
 driver.closeAllTabs();
 ```
 
@@ -197,9 +330,5 @@ driver.closeAllTabs();
 ## Author
 
 **ASMahrous** — Built as part of a Selenium automation learning journey.
-
-Feel free to fork, use, or contribute!
-
-**ASM** — Built as part of a Selenium automation learning journey.
 
 Feel free to fork, use, or contribute!
