@@ -2,8 +2,11 @@ package utils;
 
 import org.openqa.selenium.*;
 import org.openqa.selenium.chrome.ChromeDriver;
+import org.openqa.selenium.chrome.ChromeOptions;
 import org.openqa.selenium.edge.EdgeDriver;
+import org.openqa.selenium.edge.EdgeOptions;
 import org.openqa.selenium.firefox.FirefoxDriver;
+import org.openqa.selenium.firefox.FirefoxOptions;
 import org.openqa.selenium.interactions.Actions;
 import org.openqa.selenium.safari.SafariDriver;
 import org.openqa.selenium.support.ui.ExpectedConditions;
@@ -29,7 +32,7 @@ import java.util.Set;
  * <p>Provides a clean, readable API for common browser interactions including:
  * element finding, clicking, typing, dropdown handling, and smart waiting.</p>
  *
- * <p><b>Usage Example:</b></p>
+ * <p><b>Basic usage:</b></p>
  * <pre>{@code
  * ASM_Framework driver = new ASM_Framework("chrome");
  * driver.goToURL("https://example.com");
@@ -38,31 +41,135 @@ import java.util.Set;
  * WebElement usernameField = driver.findElement("id", "username");
  * driver.writeInElement(usernameField, "myUser");
  *
- * WebElement loginBtn = driver.findElement("xpath", "//button[@type='submit']");
- * driver.clickElement(loginBtn);
- *
  * driver.closeAllTabs();
  * }</pre>
  *
+ * <p><b>Usage with browser options:</b></p>
+ * <pre>{@code
+ * ASM_Framework driver = new ASM_Framework("chrome",
+ *     new ASM_Framework.BrowserOptions()
+ *         .headless()
+ *         .maximized()
+ *         .withUserDataDir("/path/to/profile")
+ *         .withArgument("--disable-notifications")
+ * );
+ * }</pre>
+ *
  * @author ASMahrous
- * @version 1.0
+ * @version 2.0
  */
-public class ASM_Framework {
-
+public class ASM_Framework
+{
     private final WebDriver browser;
 
     /**
-     * Default timeout used by all Explicit Wait methods (10 seconds).
+     * Default timeout used by all internal Explicit Wait calls (10 seconds).
      * Adjust this value if your application consistently loads slower.
      */
     private final Duration DEFAULT_TIMEOUT = Duration.ofSeconds(10);
 
     // ========================
-    // Constructor
+    // Browser Options Builder
     // ========================
 
     /**
-     * Initializes the framework with the specified browser.
+     * Fluent builder for configuring browser launch options.
+     *
+     * <p>Pass an instance to the {@link ASM_Framework#ASM_Framework(String, BrowserOptions)}
+     * constructor. Only Chrome, Firefox, and Edge are supported for options;
+     * Safari uses its default configuration.</p>
+     *
+     * <p><b>Example:</b></p>
+     * <pre>{@code
+     * BrowserOptions opts = new ASM_Framework.BrowserOptions()
+     *     .headless()
+     *     .maximized()
+     *     .withUserDataDir("C:/Users/me/chrome-profile")
+     *     .withArgument("--disable-infobars");
+     *
+     * ASM_Framework driver = new ASM_Framework("chrome", opts);
+     * }</pre>
+     */
+    public static class BrowserOptions
+    {
+
+        boolean headless    = false;
+        boolean kiosk       = false;
+        boolean maximized   = false;
+        String  userDataDir = null;
+        final List<String> extraArguments = new ArrayList<>();
+
+        /**
+         * Runs the browser in headless mode (no visible UI window).
+         * Ideal for CI pipelines and server environments.
+         *
+         * @return this {@code BrowserOptions} instance (fluent)
+         */
+        public BrowserOptions headless()
+        {
+            this.headless = true;
+            return this;
+        }
+
+        /**
+         * Launches the browser in kiosk (full-screen, borderless) mode.
+         * Note: kiosk and headless are mutually exclusive — kiosk takes precedence
+         * when both are set.
+         *
+         * @return this {@code BrowserOptions} instance (fluent)
+         */
+        public BrowserOptions kiosk()
+        {
+            this.kiosk = true;
+            return this;
+        }
+
+        /**
+         * Launches the browser in a maximized window.
+         * Has no effect when combined with headless mode.
+         *
+         * @return this {@code BrowserOptions} instance (fluent)
+         */
+        public BrowserOptions maximized()
+        {
+            this.maximized = true;
+            return this;
+        }
+
+        /**
+         * Sets a custom user-data directory so the browser loads a specific profile.
+         *
+         * <p>Useful for preserving cookies, extensions, and session state between runs.</p>
+         *
+         * @param path absolute path to the Chrome/Firefox profile directory
+         * @return this {@code BrowserOptions} instance (fluent)
+         */
+        public BrowserOptions withUserDataDir(String path)
+        {
+            this.userDataDir = path;
+            return this;
+        }
+
+        /**
+         * Appends an arbitrary browser argument (e.g., {@code "--disable-notifications"}).
+         * Can be called multiple times to add several arguments.
+         *
+         * @param argument the full argument string including leading dashes
+         * @return this {@code BrowserOptions} instance (fluent)
+         */
+        public BrowserOptions withArgument(String argument)
+        {
+            this.extraArguments.add(argument);
+            return this;
+        }
+    }
+
+    // ========================
+    // Constructors
+    // ========================
+
+    /**
+     * Initializes the framework with the specified browser using default settings.
      *
      * <p>Supported values (case-insensitive): {@code "chrome"}, {@code "firefox"},
      * {@code "edge"}, {@code "safari"}. Defaults to Chrome if unrecognized.</p>
@@ -71,23 +178,143 @@ public class ASM_Framework {
      */
     public ASM_Framework(String browserName)
     {
+        this(browserName, new BrowserOptions());
+    }
+
+    /**
+     * Initializes the framework with the specified browser and custom launch options.
+     *
+     * <p>Supported values (case-insensitive): {@code "chrome"}, {@code "firefox"},
+     * {@code "edge"}, {@code "safari"}. Defaults to Chrome if unrecognized.
+     * Safari ignores the {@code options} parameter.</p>
+     *
+     * @param browserName the browser to launch (e.g., "chrome", "firefox")
+     * @param options     a {@link BrowserOptions} instance configuring headless, kiosk, etc.
+     */
+    public ASM_Framework(String browserName, BrowserOptions options)
+    {
         switch (browserName.toLowerCase())
         {
             case "edge":
-                browser = new EdgeDriver();
+                browser = new EdgeDriver(buildEdgeOptions(options));
                 break;
 
             case "safari":
+                // Safari's driver does not expose an Options API equivalent to Chrome/Firefox
                 browser = new SafariDriver();
                 break;
 
             case "firefox":
-                browser = new FirefoxDriver();
+                browser = new FirefoxDriver(buildFirefoxOptions(options));
                 break;
 
             default:
-                browser = new ChromeDriver();
+                browser = new ChromeDriver(buildChromeOptions(options));
         }
+    }
+
+    // ==========================
+    // Options Builders (private)
+    // ==========================
+
+    /**
+     * Translates a {@link BrowserOptions} instance into a Selenium {@link ChromeOptions} object.
+     */
+    private ChromeOptions buildChromeOptions(BrowserOptions opts)
+    {
+        ChromeOptions chromeOptions = new ChromeOptions();
+
+        if (opts.kiosk)
+        {
+            chromeOptions.addArguments("--kiosk");
+        }
+        else if (opts.headless)
+        {
+            // --headless=new is the modern headless mode available from Chrome 112+
+            chromeOptions.addArguments("--headless=new");
+        }
+
+        if (opts.maximized)
+        {
+            chromeOptions.addArguments("--start-maximized");
+        }
+
+        if (opts.userDataDir != null && !opts.userDataDir.isEmpty())
+        {
+            chromeOptions.addArguments("--user-data-dir=" + opts.userDataDir);
+        }
+
+        for (String arg : opts.extraArguments)
+        {
+            chromeOptions.addArguments(arg);
+        }
+
+        return chromeOptions;
+    }
+
+    /**
+     * Translates a {@link BrowserOptions} instance into a Selenium {@link FirefoxOptions} object.
+     */
+    private FirefoxOptions buildFirefoxOptions(BrowserOptions opts)
+    {
+        FirefoxOptions firefoxOptions = new FirefoxOptions();
+
+        if (opts.headless && !opts.kiosk)
+        {
+            firefoxOptions.addArguments("--headless");
+        }
+
+        if (opts.maximized)
+        {
+            firefoxOptions.addArguments("--start-maximized");
+        }
+
+        if (opts.userDataDir != null && !opts.userDataDir.isEmpty())
+        {
+            // Firefox uses -profile rather than --user-data-dir
+            firefoxOptions.addArguments("-profile", opts.userDataDir);
+        }
+
+        for (String arg : opts.extraArguments)
+        {
+            firefoxOptions.addArguments(arg);
+        }
+
+        return firefoxOptions;
+    }
+
+    /**
+     * Translates a {@link BrowserOptions} instance into a Selenium {@link EdgeOptions} object.
+     */
+    private EdgeOptions buildEdgeOptions(BrowserOptions opts)
+    {
+        EdgeOptions edgeOptions = new EdgeOptions();
+
+        if (opts.kiosk)
+        {
+            edgeOptions.addArguments("--kiosk");
+        }
+        else if (opts.headless)
+        {
+            edgeOptions.addArguments("--headless=new");
+        }
+
+        if (opts.maximized)
+        {
+            edgeOptions.addArguments("--start-maximized");
+        }
+
+        if (opts.userDataDir != null && !opts.userDataDir.isEmpty())
+        {
+            edgeOptions.addArguments("--user-data-dir=" + opts.userDataDir);
+        }
+
+        for (String arg : opts.extraArguments)
+        {
+            edgeOptions.addArguments(arg);
+        }
+
+        return edgeOptions;
     }
 
     // ========================
@@ -224,14 +451,14 @@ public class ASM_Framework {
      * </ul>
      * </p>
      *
-     * @param by      the locator strategy (e.g., "id", "xpath")
-     * @param locator the locator value (e.g., "loginBtn", "//button[@type='submit']")
+     * @param locatorType the locator strategy (e.g., "id", "xpath")
+     * @param locator     the locator value (e.g., "loginBtn", "//button[@type='submit']")
      * @return the corresponding {@link By} object
      * @throws IllegalArgumentException if the locator type is not recognized
      */
-    public By getBy(String by, String locator)
+    public By getBy(String locatorType, String locator)
     {
-        switch (by.toLowerCase())
+        switch (locatorType.toLowerCase())
         {
             case "id":
                 return By.id(locator);
@@ -251,34 +478,46 @@ public class ASM_Framework {
                 return By.cssSelector(locator);
 
             default:
-                throw new IllegalArgumentException("Invalid locator type: " + by);
+                throw new IllegalArgumentException("Invalid locator type: " + locatorType);
         }
     }
 
     /**
-     * Finds and returns a WebElement using the specified locator strategy.
-     *
-     * <p>Delegates to {@link #getBy(String, String)} to resolve the locator,
-     * then finds the element in the current page DOM.</p>
+     * Waits for the element to be present in the DOM (using {@link #DEFAULT_TIMEOUT}),
+     * then returns it.
      *
      * <p>Supported locator types (case-insensitive):
-     * <ul>
-     *   <li>{@code "id"}</li>
-     *   <li>{@code "name"}</li>
-     *   <li>{@code "class"} or {@code "class name"}</li>
-     *   <li>{@code "xpath"}</li>
-     *   <li>{@code "css"} or {@code "css selector"}</li>
-     * </ul>
-     * </p>
+     * {@code "id"}, {@code "name"}, {@code "class"}, {@code "xpath"}, {@code "css"}</p>
      *
-     * @param by      the locator strategy (e.g., "name", "id", "xpath", "css")
-     * @param locator the locator value (e.g., "loginBtn", "//button[@type='submit']")
-     * @return the found WebElement
+     * @param locatorType the locator strategy (e.g., "id", "xpath")
+     * @param locator     the locator value (e.g., "loginBtn", "//button[@type='submit']")
+     * @return the found WebElement once it is present in the DOM
+     * @throws TimeoutException         if the element is not found within {@link #DEFAULT_TIMEOUT}
      * @throws IllegalArgumentException if the locator type is not recognized
      */
-    public WebElement findElement(String by, String locator)
+    public WebElement findElement(String locatorType, String locator)
     {
-        return browser.findElement(getBy(by, locator));
+        By by = getBy(locatorType, locator);
+        WebDriverWait wait = new WebDriverWait(browser, DEFAULT_TIMEOUT);
+        return wait.until(ExpectedConditions.presenceOfElementLocated(by));
+    }
+
+    /**
+     * Waits up to {@code timeoutSeconds} for the element to be present in the DOM,
+     * then returns it.
+     *
+     * @param locatorType    the locator strategy (e.g., "id", "xpath")
+     * @param locator        the locator value
+     * @param timeoutSeconds how long to wait before throwing {@link TimeoutException}
+     * @return the found WebElement once it is present in the DOM
+     * @throws TimeoutException         if the element is not found within the given timeout
+     * @throws IllegalArgumentException if the locator type is not recognized
+     */
+    public WebElement findElement(String locatorType, String locator, long timeoutSeconds)
+    {
+        By by = getBy(locatorType, locator);
+        WebDriverWait wait = new WebDriverWait(browser, Duration.ofSeconds(timeoutSeconds));
+        return wait.until(ExpectedConditions.presenceOfElementLocated(by));
     }
 
     // ========================
@@ -725,6 +964,21 @@ public class ASM_Framework {
     }
 
     /**
+     * Sets a global Implicit Wait using a plain seconds value.
+     *
+     * <p>Convenience overload — equivalent to
+     * {@code setImplicitWait(Duration.ofSeconds(seconds))}.</p>
+     *
+     * <p><b>Warning:</b> Avoid mixing Implicit and Explicit Waits.</p>
+     *
+     * @param seconds number of seconds to wait
+     */
+    public void setImplicitWait(long seconds)
+    {
+        browser.manage().timeouts().implicitlyWait(Duration.ofSeconds(seconds));
+    }
+
+    /**
      * Sets a global Implicit Wait using a human-readable time unit string.
      *
      * <p>Supported time units (case-insensitive):
@@ -785,7 +1039,7 @@ public class ASM_Framework {
     }
 
     /**
-     * Explicitly waits for the presence of an element in the DOM.
+     * Explicitly waits for the presence of an element in the DOM (seconds overload).
      *
      * @param locator        the By locator of the element
      * @param timeoutSeconds how long to wait before throwing TimeoutException
@@ -797,19 +1051,50 @@ public class ASM_Framework {
     }
 
     /**
-     * Waits for an element to be present using a Fluent Wait strategy.
+     * Explicitly waits for the presence of an element in the DOM ({@link Duration} overload).
+     *
+     * @param locator  the By locator of the element
+     * @param timeout  how long to wait before throwing TimeoutException
+     */
+    public void setExplicitWait(By locator, Duration timeout)
+    {
+        WebDriverWait wait = new WebDriverWait(browser, timeout);
+        wait.until(ExpectedConditions.presenceOfElementLocated(locator));
+    }
+
+    /**
+     * Waits for an element to be present using a Fluent Wait strategy (seconds overload).
      * Polls repeatedly until the element appears or the timeout is reached.
      *
-     * @param locator         the By locator of the element
-     * @param timeoutSeconds  maximum time to wait
-     * @param pollingMillis   how often to check (in milliseconds)
-     * @param timeoutMessage  custom message if timeout is reached
+     * @param locator        the By locator of the element
+     * @param timeoutSeconds maximum time to wait
+     * @param pollingMillis  how often to check (in milliseconds)
+     * @param timeoutMessage custom message if timeout is reached
      */
     public void setFluentWait(By locator, long timeoutSeconds, long pollingMillis, String timeoutMessage)
     {
         new FluentWait<>(browser)
                 .withTimeout(Duration.ofSeconds(timeoutSeconds))
                 .pollingEvery(Duration.ofMillis(pollingMillis))
+                .ignoring(NoSuchElementException.class)
+                .withMessage(timeoutMessage)
+                .until(ExpectedConditions.presenceOfElementLocated(locator));
+    }
+
+    /**
+     * Waits for an element to be present using a Fluent Wait strategy ({@link Duration} overload).
+     * Polls repeatedly until the element appears or the timeout is reached.
+     *
+     * @param locator         the By locator of the element
+     * @param timeout         maximum time to wait
+     * @param pollingInterval how often to check
+     * @param timeoutMessage  custom message if timeout is reached
+     */
+    public void setFluentWait(By locator, Duration timeout, Duration pollingInterval, String timeoutMessage)
+    {
+        new FluentWait<>(browser)
+                .withTimeout(timeout)
+                .pollingEvery(pollingInterval)
                 .ignoring(NoSuchElementException.class)
                 .withMessage(timeoutMessage)
                 .until(ExpectedConditions.presenceOfElementLocated(locator));
