@@ -7,11 +7,12 @@ A lightweight Java wrapper around Selenium WebDriver that provides a clean, read
 ## Features
 
 - **Multi-browser support** — Chrome, Firefox, Edge, Safari
+- **Configurable browser options** — headless, kiosk, maximized, custom profiles, and arbitrary arguments via a fluent `BrowserOptions` builder
 - **Smart element finding** — supports ID, Name, Class, XPath, CSS Selector
 - **Dual input style** — every method accepts both `By` locator and `WebElement`
-- **Built-in Explicit & Fluent Waits** — clickable and visibility checks before every interaction
+- **Built-in Explicit & Fluent Waits** — clickable, visibility, and presence checks before every interaction
 - **Flexible Implicit Wait** — set wait duration using human-readable strings like `"seconds"` or `"ms"`
-- **Actions support** — right-click, double-click, hover, drag & drop, scroll
+- **Actions support** — right-click, double-click, hover, drag & drop, scroll-to-center
 - **Dropdown handling** — select/deselect by index, value, visible text, or partial text
 - **Checkbox & Radio support** — smart check/uncheck with state awareness
 - **Element state validation** — check if elements are visible, enabled, or selected
@@ -41,11 +42,22 @@ selenium_java_automation_framework/
 │   └── main/
 │       └── java/
 │           └── utils/
-│               └── ASM_Framework.java   ← The framework wrapper
+│               ├── ASM_Framework.java          ← Single entry point for all test scripts
+│               └── framework/
+│                   ├── BrowserManager.java     ← Browser launch, navigation, window size
+│                   ├── WaitManager.java        ← Implicit, explicit, fluent waits
+│                   ├── ElementFinder.java      ← Locating elements in the DOM
+│                   ├── ElementInteractions.java← Click, type, clear, getText, state checks
+│                   ├── ActionsManager.java     ← Hover, right-click, double-click, drag, scroll
+│                   ├── DropdownManager.java    ← Select / deselect from <select>
+│                   ├── WindowManager.java      ← Tab / window switching
+│                   ├── AlertManager.java       ← JavaScript alert / confirm / prompt
+│                   ├── FrameManager.java       ← IFrame context switching
+│                   └── ScreenshotManager.java  ← Timestamped PNG capture
 ├── src/
 │   └── test/
-│       └── java/                        ← Your test classes go here
-├── Screenshots/                         ← Auto-created; stores captured screenshots
+│       └── java/                               ← Your test classes go here
+├── Screenshots/                                ← Auto-created; stores captured screenshots
 ├── pom.xml
 └── README.md
 ```
@@ -65,7 +77,7 @@ cd selenium-java-automation-framework
 <dependency>
     <groupId>org.seleniumhq.selenium</groupId>
     <artifactId>selenium-java</artifactId>
-    <version>4.18.1</version>
+    <version>4.40.0</version>
 </dependency>
 ```
 
@@ -97,13 +109,35 @@ driver.closeAllTabs();
 | `closeCurrentTab()` | Close the active tab |
 | `closeAllTabs()` | Quit the browser session |
 
+#### Browser Options
+
+Use the fluent `BrowserOptions` builder for custom launch configuration. Only Chrome, Firefox, and Edge support options; Safari uses default config.
+
+```java
+ASM_Framework driver = new ASM_Framework("chrome",
+    new ASM_Framework.BrowserOptions()
+        .headless()
+        .maximized()
+        .withArgument("--disable-notifications")
+);
+```
+
+| Method | Description |
+|--------|-------------|
+| `.headless()` | Run with no visible UI — ideal for CI environments |
+| `.kiosk()` | Launch in full-screen borderless kiosk mode (takes precedence over headless) |
+| `.maximized()` | Launch in a maximized window |
+| `.withUserDataDir(path)` | Load a specific browser profile by absolute path |
+| `.withArgument(arg)` | Append an arbitrary browser argument (e.g., `"--disable-infobars"`) |
+
 ---
 
 ### Element Finding
 
 | Method | Description |
 |--------|-------------|
-| `findElement(by, locator)` | Find element — returns `WebElement` |
+| `findElement(by, locator)` | Find element using default timeout — returns `WebElement` |
+| `findElement(by, locator, timeoutSeconds)` | Find element with a custom timeout — returns `WebElement` |
 | `getBy(by, locator)` | Convert string strategy to `By` object |
 
 **Supported locator strategies:** `"id"`, `"name"`, `"class"`, `"xpath"`, `"css"`
@@ -132,7 +166,7 @@ All interaction methods accept both `By` and `WebElement`.
 | `doubleClick(By / WebElement)` | Double-click an element |
 | `hoverOverElement(By / WebElement)` | Hover mouse over an element |
 | `dragAndDrop(By source, By target)` | Drag source and drop onto target |
-| `scrollToElement(By)` | Scroll element into viewport |
+| `scrollToElement(By / WebElement)` | Scroll element to center of viewport |
 
 ---
 
@@ -155,7 +189,7 @@ All dropdown methods accept both `By` and `WebElement`.
 | `selectFromDropDownMenu(By / WebElement, by, value)` | Select a dropdown option |
 | `deselectFromDropDownMenu(By / WebElement, by, value)` | Deselect a dropdown option |
 
-**Selection strategies:** `"index"`, `"value"`, `"visible text"`, `"contains text"`
+**Selection strategies:** `"index"`, `"value"`, `"visible text"`, `"contains text"`, `"all"` *(deselect only)*
 
 ---
 
@@ -173,12 +207,18 @@ All dropdown methods accept both `By` and `WebElement`.
 
 | Method | Description |
 |--------|-------------|
-| `setImplicitWait(Duration)` | Set implicit wait using `Duration` object |
-| `setImplicitWait("seconds", 5)` | Set implicit wait using readable string |
-| `setExplicitWait(By, timeoutSeconds)` | Wait for element presence with custom timeout |
-| `setFluentWait(By, timeout, pollingMs, message)` | Fluent wait with polling interval and custom message |
+| `setImplicitWait(Duration)` | Set implicit wait using a `Duration` object |
+| `setImplicitWait(long seconds)` | Set implicit wait using a plain seconds value |
+| `setImplicitWait(String unit, long time)` | Set implicit wait using a readable unit string |
+| `setExplicitWait(By, long timeoutSeconds)` | Wait for element presence with a custom timeout |
+| `setExplicitWait(By, Duration timeout)` | Wait for element presence with a `Duration` timeout |
+| `setFluentWait(By, long timeout, long pollingMs, String message)` | Fluent wait with polling interval and custom message |
+| `setFluentWait(By, Duration timeout, Duration polling, String message)` | Fluent wait using `Duration` overloads |
 
-**Supported time units for implicit wait:** `"seconds"`, `"minutes"`, `"hours"`, `"days"`, `"ms"`, `"ns"`
+**Supported time units for implicit wait (case-insensitive):**
+`"seconds"` / `"sec"`, `"minutes"` / `"min"`, `"hours"` / `"hour"`, `"days"` / `"day"`, `"ms"` / `"mili"`, `"ns"` / `"nano"`
+
+> ⚠️ **Warning:** Avoid mixing Implicit and Explicit Waits — this can cause unpredictable timeout behavior in Selenium.
 
 ---
 
@@ -214,9 +254,9 @@ driver.closeCurrentWindowAndSwitchTo(mainWindow);
 | `getAlertText()` | Read the message text of the current alert |
 | `typeInAlert(text)` | Type into a prompt dialog then accept it |
 
-All alert methods automatically wait up to `DEFAULT_TIMEOUT` for the dialog to appear.
+All alert methods automatically wait up to `DEFAULT_TIMEOUT` (10 seconds) for the dialog to appear.
 
-**Usage example:**
+**Usage examples:**
 ```java
 driver.clickElement(By.id("deleteBtn"));
 System.out.println(driver.getAlertText()); // "Are you sure?"
@@ -256,7 +296,7 @@ driver.switchToDefaultContent(); // back to the main page
 |--------|-------------|
 | `takeScreenshot(label)` | Capture the current page as a PNG and save it to `Screenshots/` |
 
-Screenshots are saved to a `Screenshots/` folder at the project root. The folder is created automatically if it does not exist. Each file is named using your label and a full timestamp to prevent overwrites:
+Screenshots are saved to a `Screenshots/` folder at the project root. The folder is created automatically if it does not exist. Each file is named using your label plus a full timestamp to prevent overwrites:
 
 ```
 Screenshots/
@@ -280,9 +320,10 @@ driver.takeScreenshot("AfterSubmit");
 ## Full Usage Example
 
 ```java
-// Initialize
-ASM_Framework driver = new ASM_Framework("chrome");
-driver.manageScreenSize("maximize");
+// Initialize with options
+ASM_Framework driver = new ASM_Framework("chrome",
+    new ASM_Framework.BrowserOptions().maximized()
+);
 driver.goToURL("https://the-internet.herokuapp.com/login");
 driver.takeScreenshot("LoginPage");
 
